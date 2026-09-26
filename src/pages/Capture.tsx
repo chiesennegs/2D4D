@@ -134,22 +134,33 @@ export function Capture() {
     if (!video || !canvas) return;
     const width = video.videoWidth;
     const height = video.videoHeight;
-    canvas.width = width;
-    canvas.height = height;
 
-    const base = document.createElement("canvas");
-    base.width = width;
-    base.height = height;
-    base.getContext("2d")!.drawImage(video, 0, 0, width, height);
-    baseImageRef.current = base;
-
-    canvas.getContext("2d")!.drawImage(base, 0, 0, width, height);
-    setImgSize({ width, height });
-
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    setPhase("detecting");
+    // The camera stream can still be warming up (dimensions aren't known
+    // until its 'loadedmetadata' fires) when the button is tapped, e.g. on
+    // a slower phone right after granting permission. Without this guard,
+    // drawImage throws on a 0x0 canvas and the tap silently does nothing.
+    if (width === 0 || height === 0) {
+      setError("Camera is still starting up — wait a second and try again.");
+      setPhase("error");
+      return;
+    }
 
     try {
+      canvas.width = width;
+      canvas.height = height;
+
+      const base = document.createElement("canvas");
+      base.width = width;
+      base.height = height;
+      base.getContext("2d")!.drawImage(video, 0, 0, width, height);
+      baseImageRef.current = base;
+
+      canvas.getContext("2d")!.drawImage(base, 0, 0, width, height);
+      setImgSize({ width, height });
+
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      setPhase("detecting");
+
       const lm = await detectHandLandmarks(base);
       if (!lm) {
         setError("Couldn't find a hand in that photo. Make sure your whole hand is in frame, well-lit, and try again.");
@@ -161,7 +172,7 @@ export function Capture() {
       redraw(lm, []);
       setPhase("calibrate");
     } catch {
-      setError("Hand detection failed to load. Check your connection and try again.");
+      setError("Something went wrong capturing that photo. Check your connection and try again.");
       setPhase("error");
     }
   }
@@ -253,28 +264,29 @@ export function Capture() {
         </div>
       )}
 
-      {(phase === "detecting" || phase === "calibrate" || phase === "review") && (
-        <div className="stack">
-          {phase === "detecting" && <p>Finding your hand landmarks…</p>}
-          {phase === "calibrate" && calPoints.length === 0 && (
-            <p>
-              Tap both ends of your {calObj?.label.toLowerCase()}'s long edge (
-              {calObj?.referenceLengthMm}mm) in the photo below.
-            </p>
+      {/* Always mounted (not just once phase leaves "camera") so capture()
+          has a real canvas element to draw into the moment it's clicked —
+          otherwise canvasRef.current is null on the very click that needs it. */}
+      <div className="stack" style={{ display: phase === "camera" || phase === "error" ? "none" : "flex" }}>
+        {phase === "detecting" && <p>Finding your hand landmarks…</p>}
+        {phase === "calibrate" && calPoints.length === 0 && (
+          <p>
+            Tap both ends of your {calObj?.label.toLowerCase()}'s long edge (
+            {calObj?.referenceLengthMm}mm) in the photo below.
+          </p>
+        )}
+        {phase === "calibrate" && calPoints.length === 1 && <p>Now tap the other end.</p>}
+        {phase === "review" && <p>Calibration set. Check the overlay looks right, then continue.</p>}
+        <canvas ref={canvasRef} onClick={onCanvasClick} style={{ width: "100%", height: "auto", display: "block", borderRadius: "var(--radius)", cursor: phase === "calibrate" ? "crosshair" : "default" }} />
+        <div className="row">
+          <button onClick={retake}>Retake photo</button>
+          {phase === "review" && (
+            <button className="btn-primary" onClick={accept} style={{ flex: 1 }}>
+              Use this {side === "right" ? "→ capture left hand" : "→ see results"}
+            </button>
           )}
-          {phase === "calibrate" && calPoints.length === 1 && <p>Now tap the other end.</p>}
-          {phase === "review" && <p>Calibration set. Check the overlay looks right, then continue.</p>}
-          <canvas ref={canvasRef} onClick={onCanvasClick} style={{ width: "100%", height: "auto", display: "block", borderRadius: "var(--radius)", cursor: phase === "calibrate" ? "crosshair" : "default" }} />
-          <div className="row">
-            <button onClick={retake}>Retake photo</button>
-            {phase === "review" && (
-              <button className="btn-primary" onClick={accept} style={{ flex: 1 }}>
-                Use this {side === "right" ? "→ capture left hand" : "→ see results"}
-              </button>
-            )}
-          </div>
         </div>
-      )}
+      </div>
 
       {phase === "error" && (
         <div className="stack">

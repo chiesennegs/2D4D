@@ -25,20 +25,32 @@ export function HandGuideOverlay({ side }: { side: "right" | "left" }) {
   return (
     <svg className="capture-guide" viewBox="0 0 300 400" preserveAspectRatio="xMidYMid meet">
       <g transform={flip ? "translate(300,0) scale(-1,1)" : undefined}>
-        <g fill="rgba(255,255,255,0.16)" stroke="white" strokeOpacity="0.75" strokeWidth="2" strokeLinejoin="round">
-          {/* pinky */}
-          <path d="M120,207 L133,213 Q145,213 145,224 L142,150 Q141,138 130,138 Q119,138 118,150 Z" />
-          {/* ring */}
-          <path d="M153,203 L182,203 Q182,192 178,192 L166,80 Q164,68 152,68 Q140,68 139,80 L152,192 Q153,198 153,203 Z" />
-          {/* middle */}
-          <path d="M186,200 L216,200 L203,54 Q201,42 190,42 Q179,42 178,54 L191,190 Q192,196 186,200 Z" />
-          {/* index */}
-          <path d="M219,204 L247,215 L253,90 Q253,78 242,76 Q231,75 228,86 L221,192 Q219,198 219,204 Z" />
-          {/* thumb */}
-          <path d="M226,232 Q222,220 232,213 L263,178 Q272,169 281,177 Q289,185 282,195 L253,231 Q244,242 232,239 Q227,237 226,232 Z" />
-          {/* palm */}
-          <path d="M113,214 Q112,206 121,206 L152,203 Q182,203 186,200 L220,203 Q234,205 233,220 L233,232 Q248,238 253,231 L257,255 Q259,278 240,290 Q210,304 170,303 Q131,301 116,282 Q107,270 108,250 Z" />
+        {/* soft fill silhouette, one group opacity so overlaps don't darken */}
+        <g fill="white" opacity="0.22">
+          <path d="M124,205 L116,160 A10,10 0 0 1 136,160 L152,205 Z" />
+          <path d="M156,203 L155,89 A11,11 0 0 1 177,89 L188,203 Z" />
+          <path d="M189,200 L194,63 A11,11 0 0 1 216,63 L221,200 Z" />
+          <path d="M223,203 L238,92 A10,10 0 0 1 258,92 L253,203 Z" />
+          <path d="M245,215 L282,191 A14,14 0 0 1 282,219 L245,249 Z" />
+          <path d="M108,300 C104,258 108,218 118,199 C138,190 172,187 205,188 C230,189 248,195 256,206 C270,216 275,238 264,262 C257,282 248,296 236,308 C205,320 150,320 118,313 C110,311 106,305 108,300 Z" />
         </g>
+        {/* crisp outline per finger/thumb, drawn after the fill so the tips read cleanly */}
+        <g fill="none" stroke="white" strokeOpacity="0.85" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round">
+          <path d="M124,205 L116,160 A10,10 0 0 1 136,160 L152,205" />
+          <path d="M156,203 L155,89 A11,11 0 0 1 177,89 L188,203" />
+          <path d="M189,200 L194,63 A11,11 0 0 1 216,63 L221,200" />
+          <path d="M223,203 L238,92 A10,10 0 0 1 258,92 L253,203" />
+          <path d="M245,215 L282,191 A14,14 0 0 1 282,219 L245,249" />
+        </g>
+        {/* palm outline on top, hiding the finger-base seams */}
+        <path
+          d="M108,300 C104,258 108,218 118,199 C138,190 172,187 205,188 C230,189 248,195 256,206 C270,216 275,238 264,262 C257,282 248,296 236,308 C205,320 150,320 118,313 C110,311 106,305 108,300 Z"
+          fill="none"
+          stroke="white"
+          strokeOpacity="0.85"
+          strokeWidth="2"
+          strokeLinejoin="round"
+        />
       </g>
 
       <rect x={cardX} y="128" width="78" height="176" rx="12" fill="none" stroke="white" strokeOpacity="0.6" strokeWidth="2" strokeDasharray="6 6" />
