@@ -16,6 +16,11 @@
  * not CSS, so only the shapes flip). Text stays upright and is positioned
  * explicitly per side instead of being mirrored, since mirroring text
  * renders it backwards.
+ *
+ * Finger lengths are calibrated to measured proportions (relative to the
+ * middle finger) from an actual hand photo, not guessed: index 0.90,
+ * ring 0.97, pinky 0.78, thumb 0.57. An earlier version guessed pinky at
+ * 0.37 and thumb at 0.31 — both far too stubby, which read as "wonky."
  */
 export function HandGuideOverlay({ side }: { side: "right" | "left" }) {
   const flip = side === "left";
@@ -33,20 +38,20 @@ export function HandGuideOverlay({ side }: { side: "right" | "left" }) {
       <g transform={flip ? "translate(300,0) scale(-1,1)" : undefined}>
         {/* soft fill silhouette, one group opacity so overlaps don't darken */}
         <g fill="white" opacity="0.22">
-          <path d="M124,205 L116,160 A10,10 0 0 1 136,160 L152,205 Z" />
-          <path d="M156,203 L155,89 A11,11 0 0 1 177,89 L188,203 Z" />
+          <path d="M124,205 L116,101 A10,10 0 0 1 136,101 L152,205 Z" />
+          <path d="M156,203 L155,70 A11,11 0 0 1 177,70 L188,203 Z" />
           <path d="M189,200 L194,63 A11,11 0 0 1 216,63 L221,200 Z" />
-          <path d="M223,203 L238,92 A10,10 0 0 1 258,92 L253,203 Z" />
-          <path d="M245,215 L282,191 A14,14 0 0 1 282,219 L245,249 Z" />
+          <path d="M223,203 L238,80 A10,10 0 0 1 258,80 L253,203 Z" />
+          <path d="M245,215 L288,149 A14,14 0 0 1 288,177 L245,249 Z" />
           <path d="M108,300 C104,258 108,218 118,199 C138,190 172,187 205,188 C230,189 248,195 256,206 C270,216 275,238 264,262 C257,282 248,296 236,308 C205,320 150,320 118,313 C110,311 106,305 108,300 Z" />
         </g>
         {/* crisp outline per finger/thumb, drawn after the fill so the tips read cleanly */}
         <g fill="none" stroke="white" strokeOpacity="0.85" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round">
-          <path d="M124,205 L116,160 A10,10 0 0 1 136,160 L152,205" />
-          <path d="M156,203 L155,89 A11,11 0 0 1 177,89 L188,203" />
+          <path d="M124,205 L116,101 A10,10 0 0 1 136,101 L152,205" />
+          <path d="M156,203 L155,70 A11,11 0 0 1 177,70 L188,203" />
           <path d="M189,200 L194,63 A11,11 0 0 1 216,63 L221,200" />
-          <path d="M223,203 L238,92 A10,10 0 0 1 258,92 L253,203" />
-          <path d="M245,215 L282,191 A14,14 0 0 1 282,219 L245,249" />
+          <path d="M223,203 L238,80 A10,10 0 0 1 258,80 L253,203" />
+          <path d="M245,215 L288,149 A14,14 0 0 1 288,177 L245,249" />
         </g>
         {/* palm outline on top, hiding the finger-base seams */}
         <path

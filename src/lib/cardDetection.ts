@@ -20,6 +20,39 @@ interface NormBox {
 const CARD_ASPECT = 85.6 / 53.98; // ≈ 1.585
 const WORK_SIZE = 320; // downscale target (longest side) — keeps this fast on a full-res phone photo
 
+// 4-neighbor erosion/dilation on a binary mask, used together (erode then
+// dilate = "opening") to strip thin noise bridges while leaving solid blobs
+// like a card intact.
+function erode(mask: Uint8Array, w: number, h: number): Uint8Array {
+  const out = new Uint8Array(w * h);
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      if (mask[i] && mask[i - 1] && mask[i + 1] && mask[i - w] && mask[i + w]) out[i] = 1;
+    }
+  }
+  return out;
+}
+
+function dilate(mask: Uint8Array, w: number, h: number): Uint8Array {
+  const out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (
+        mask[i] ||
+        (x > 0 && mask[i - 1]) ||
+        (x < w - 1 && mask[i + 1]) ||
+        (y > 0 && mask[i - w]) ||
+        (y < h - 1 && mask[i + w])
+      ) {
+        out[i] = 1;
+      }
+    }
+  }
+  return out;
+}
+
 // Standard Otsu threshold selection: finds the brightness cutoff that best
 // separates a bimodal histogram (background vs. foreground) into two
 // classes by maximizing between-class variance.
@@ -120,13 +153,23 @@ export function detectCardEdge(
 
   // Foreground mask, excluding the hand region — what's left should be
   // dominated by the card (plus whatever background-contrast noise exists).
-  const foreground = new Uint8Array(w * h);
+  let foreground: Uint8Array = new Uint8Array(w * h);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       if (inHand(x, y)) continue;
       if (classOf(x, y) !== backgroundClass) foreground[y * w + x] = 1;
     }
   }
+
+  // A textured surface (stone, wood grain, fabric) throws off enough
+  // scattered above-threshold speckles that they 4-connect into one sprawling
+  // network spanning most of the frame, swallowing the actual card into a
+  // single low-density "component" that gets (correctly) rejected as not a
+  // solid shape — losing the card in the process instead of finding it on
+  // its own. Morphological opening (erode then dilate) breaks the thin
+  // speckle-to-speckle bridges first, so a solid blob like the card survives
+  // as its own component while the noise network fragments apart.
+  foreground = dilate(erode(foreground, w, h), w, h);
 
   // Connected-component labeling (iterative flood fill, 4-connected).
   // Collect every component rather than just the largest one — the
