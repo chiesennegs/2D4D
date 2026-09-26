@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Disclaimer } from "../components/Disclaimer";
+import { Logo } from "../components/Logo";
 import { useSessionStore } from "../state/sessionStore";
 
 export function Welcome() {
@@ -13,7 +14,8 @@ export function Welcome() {
 
   return (
     <div className="stack">
-      <div className="stack">
+      <div className="stack" style={{ alignItems: "center", textAlign: "center" }}>
+        <Logo size={72} />
         <h1>2D4D</h1>
         <p>
           Estimate your 2D:4D digit ratio — the relative length of your index (2nd) and ring

@@ -1,4 +1,6 @@
 import { Link, Route, Routes } from "react-router-dom";
+import { Logo } from "./components/Logo";
+import { ScrollToTop } from "./components/ScrollToTop";
 import { Calibration } from "./pages/Calibration";
 import { Capture } from "./pages/Capture";
 import { Demographics } from "./pages/Demographics";
@@ -9,10 +11,14 @@ import { Welcome } from "./pages/Welcome";
 export function App() {
   return (
     <>
+      <ScrollToTop />
       <header className="top-bar">
         <Link to="/" className="brand">
-          2D4D
-          <small>digit ratio estimator</small>
+          <Logo size={28} />
+          <span>
+            2D4D
+            <small>digit ratio estimator</small>
+          </span>
         </Link>
         <Link to="/methodology" className="nav-link">
           Methodology
