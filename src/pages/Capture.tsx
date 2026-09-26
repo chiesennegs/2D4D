@@ -12,7 +12,7 @@ import type { HandLandmarks, HandSide, Point2D } from "../types";
 type Phase = "camera" | "detecting" | "calibrate" | "review" | "error";
 type NormBox = { minX: number; minY: number; maxX: number; maxY: number };
 
-function handBoundingBox(lm: HandLandmarks, marginFrac: number): NormBox {
+function handBoundingBox(lm: HandLandmarks, marginFrac: number, absoluteCap: number): NormBox {
   let minX = 1;
   let minY = 1;
   let maxX = 0;
@@ -23,8 +23,14 @@ function handBoundingBox(lm: HandLandmarks, marginFrac: number): NormBox {
     if (p.y < minY) minY = p.y;
     if (p.y > maxY) maxY = p.y;
   }
-  const marginX = (maxX - minX) * marginFrac;
-  const marginY = (maxY - minY) * marginFrac;
+  // The guide deliberately places the card right next to the hand, so a
+  // margin sized as a fraction of the hand's own bounding box can grow
+  // large enough (with fingers spread) to reach past a small hand-to-card
+  // gap and clip into the card itself — which is exactly what made
+  // detection fail on an otherwise clean, high-contrast photo. Capping the
+  // margin in absolute (whole-image) terms keeps that from happening.
+  const marginX = Math.min((maxX - minX) * marginFrac, absoluteCap);
+  const marginY = Math.min((maxY - minY) * marginFrac, absoluteCap);
   return {
     minX: Math.max(0, minX - marginX),
     minY: Math.max(0, minY - marginY),
@@ -261,7 +267,7 @@ export function Capture() {
 
       // Try to find the card automatically (excluding the hand's own
       // region) so the user doesn't have to tap its corners by hand.
-      const handBox = handBoundingBox(lm, 0.25);
+      const handBox = handBoundingBox(lm, 0.06, 0.035);
       const detected = detectCardEdge(base, handBox);
       if (detected) {
         setCalPoints([detected.a, detected.b]);

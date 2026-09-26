@@ -128,13 +128,17 @@ export function detectCardEdge(
     }
   }
 
-  // Connected-component labeling (iterative flood fill, 4-connected) to find
-  // the single largest foreground blob rather than trusting a raw bounding
-  // box of every foreground pixel, which noise elsewhere in the frame could
-  // blow out.
+  // Connected-component labeling (iterative flood fill, 4-connected).
+  // Collect every component rather than just the largest one — the
+  // largest foreground blob in frame is often background texture noise or
+  // a stray shadow, not the card, so we score every plausibly-sized blob
+  // by how closely it matches a real card's aspect ratio and take the best
+  // match instead of just the biggest.
   const visited = new Uint8Array(w * h);
-  let best: { area: number; box: NormBox } | null = null;
   const stack = new Int32Array(w * h);
+  const imageArea = w * h;
+  let bestBox: NormBox | null = null;
+  let bestScore = Infinity;
 
   for (let start = 0; start < w * h; start++) {
     if (foreground[start] !== 1 || visited[start] === 1) continue;
@@ -166,30 +170,37 @@ export function detectCardEdge(
         }
       }
     }
-    if (!best || area > best.area) {
-      best = { area, box: { minX, minY, maxX, maxY } };
+
+    const boxW = maxX - minX;
+    const boxH = maxY - minY;
+    const boxArea = boxW * boxH;
+    if (boxArea < imageArea * 0.005 || boxArea > imageArea * 0.6) continue;
+    // A real blob should mostly fill its own bounding box; a sparse,
+    // scattered set of foreground pixels (e.g. noisy background texture)
+    // spread across a big box isn't a solid rectangle.
+    if (area < boxArea * 0.5) continue;
+    const long = Math.max(boxW, boxH);
+    const short = Math.min(boxW, boxH);
+    const aspect = long / Math.max(short, 1);
+    if (aspect < 1.15 || aspect > 2.3) continue; // doesn't look card-shaped at all
+    const score = Math.abs(aspect - CARD_ASPECT);
+    if (score < bestScore) {
+      bestScore = score;
+      bestBox = { minX, minY, maxX, maxY };
     }
   }
 
-  if (!best) return null;
+  if (!bestBox) return null;
 
-  const boxW = best.box.maxX - best.box.minX;
-  const boxH = best.box.maxY - best.box.minY;
-  const area = boxW * boxH;
-  const imageArea = w * h;
-  if (area < imageArea * 0.01 || area > imageArea * 0.6) return null;
-
-  const long = Math.max(boxW, boxH);
-  const short = Math.min(boxW, boxH);
-  const aspect = long / Math.max(short, 1);
-  if (aspect < 1.15 || aspect > 2.3) return null; // doesn't look card-shaped at all
-  const confidence: DetectedCard["confidence"] = Math.abs(aspect - CARD_ASPECT) < 0.25 ? "high" : "low";
+  const boxW = bestBox.maxX - bestBox.minX;
+  const boxH = bestBox.maxY - bestBox.minY;
+  const confidence: DetectedCard["confidence"] = bestScore < 0.25 ? "high" : "low";
 
   const box: NormBox = {
-    minX: best.box.minX / w,
-    minY: best.box.minY / h,
-    maxX: best.box.maxX / w,
-    maxY: best.box.maxY / h,
+    minX: bestBox.minX / w,
+    minY: bestBox.minY / h,
+    maxX: bestBox.maxX / w,
+    maxY: bestBox.maxY / h,
   };
   const centerX = (box.minX + box.maxX) / 2;
   const centerY = (box.minY + box.maxY) / 2;
