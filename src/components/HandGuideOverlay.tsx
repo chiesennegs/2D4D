@@ -19,8 +19,14 @@
  */
 export function HandGuideOverlay({ side }: { side: "right" | "left" }) {
   const flip = side === "left";
-  const cardX = side === "right" ? 18 : 300 - 18 - 78;
-  const cardLabelX = cardX + 39;
+  // Sized relative to the hand drawing below using its actual proportions
+  // (card's 85.6 x 53.98mm long edge against a ~190mm hand length) — it was
+  // previously drawn about 45% too large.
+  const cardWidth = 78;
+  const cardHeight = 124;
+  const cardY = 154;
+  const cardX = side === "right" ? 18 : 300 - 18 - cardWidth;
+  const cardLabelX = cardX + cardWidth / 2;
 
   return (
     <svg className="capture-guide" viewBox="0 0 300 400" preserveAspectRatio="xMidYMid meet">
@@ -53,11 +59,11 @@ export function HandGuideOverlay({ side }: { side: "right" | "left" }) {
         />
       </g>
 
-      <rect x={cardX} y="128" width="78" height="176" rx="12" fill="none" stroke="white" strokeOpacity="0.6" strokeWidth="2" strokeDasharray="6 6" />
-      <text x={cardLabelX} y="208" fill="white" fillOpacity="0.85" fontSize="13" textAnchor="middle">
+      <rect x={cardX} y={cardY} width={cardWidth} height={cardHeight} rx="10" fill="none" stroke="white" strokeOpacity="0.6" strokeWidth="2" strokeDasharray="6 6" />
+      <text x={cardLabelX} y={cardY + cardHeight / 2 - 8} fill="white" fillOpacity="0.85" fontSize="12" textAnchor="middle">
         <tspan x={cardLabelX} dy="0">card /</tspan>
-        <tspan x={cardLabelX} dy="16">coin</tspan>
-        <tspan x={cardLabelX} dy="16">here</tspan>
+        <tspan x={cardLabelX} dy="14">coin</tspan>
+        <tspan x={cardLabelX} dy="14">here</tspan>
       </text>
       <text x="150" y="24" fill="white" fillOpacity="0.9" fontSize="13" textAnchor="middle">
         palm up, fingers relaxed

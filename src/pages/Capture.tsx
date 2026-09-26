@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { HandGuideOverlay } from "../components/HandGuideOverlay";
 import { ProgressSteps } from "../components/ProgressSteps";
+import { detectCardEdge } from "../lib/cardDetection";
 import { CALIBRATION_OBJECTS } from "../data/calibrationObjects";
 import { detectHandLandmarks, preloadHandLandmarker } from "../lib/handLandmarker";
 import { computeHandMeasurement } from "../lib/ratio";
@@ -9,6 +10,28 @@ import { useSessionStore } from "../state/sessionStore";
 import type { HandLandmarks, HandSide, Point2D } from "../types";
 
 type Phase = "camera" | "detecting" | "calibrate" | "review" | "error";
+type NormBox = { minX: number; minY: number; maxX: number; maxY: number };
+
+function handBoundingBox(lm: HandLandmarks, marginFrac: number): NormBox {
+  let minX = 1;
+  let minY = 1;
+  let maxX = 0;
+  let maxY = 0;
+  for (const p of lm) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+  const marginX = (maxX - minX) * marginFrac;
+  const marginY = (maxY - minY) * marginFrac;
+  return {
+    minX: Math.max(0, minX - marginX),
+    minY: Math.max(0, minY - marginY),
+    maxX: Math.min(1, maxX + marginX),
+    maxY: Math.min(1, maxY + marginY),
+  };
+}
 
 const LANDMARK_CONNECTIONS: Array<[number, number]> = [
   [0, 1], [1, 2], [2, 3], [3, 4],
@@ -29,12 +52,14 @@ export function Capture() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const baseImageRef = useRef<HTMLCanvasElement | null>(null);
 
   const [phase, setPhase] = useState<Phase>("camera");
   const [error, setError] = useState<string | null>(null);
   const [imgSize, setImgSize] = useState({ width: 0, height: 0 });
   const [landmarks, setLandmarks] = useState<HandLandmarks | null>(null);
   const [calPoints, setCalPoints] = useState<Point2D[]>([]);
+  const [autoDetected, setAutoDetected] = useState(false);
 
   useEffect(() => {
     preloadHandLandmarker().catch(() => void 0);
@@ -45,6 +70,17 @@ export function Capture() {
       navigate("/calibration");
       return;
     }
+    // Capture stays mounted across the right-hand -> left-hand transition
+    // (same route, just a different :side param), so without this reset
+    // the component was stuck showing whatever phase the right hand ended
+    // on instead of reactivating the live camera view for the left hand.
+    setPhase("camera");
+    setError(null);
+    setLandmarks(null);
+    setCalPoints([]);
+    setAutoDetected(false);
+    baseImageRef.current = null;
+
     let cancelled = false;
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1440 } } })
@@ -68,35 +104,86 @@ export function Capture() {
   }, [side, calibrationObjectId]);
 
   const drawStillWithOverlay = useCallback(
-    (lm: HandLandmarks | null, points: Point2D[]) => {
+    (lm: HandLandmarks | null, points: Point2D[], box: NormBox | null) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       ctx.save();
-      // Redraw base frame is handled by caller keeping an offscreen copy;
-      // here we just draw overlays on top of what's already rasterized.
+      // getUserMedia was asked for ~1920px wide, but phones can ignore that
+      // hint and hand back their native (often 3000-4000px) resolution, and
+      // the canvas then gets scaled way down to fit the screen — so these
+      // need to be sized as a fraction of the actual capture width, not a
+      // fixed pixel count, or they shrink to invisible on a high-res photo.
+      // Markers also get a dark halo so they read against any background.
+      const unit = canvas.width / 1000;
+      const dotR = Math.max(8, 13 * unit);
+      const lineW = Math.max(4, 8 * unit);
+      const haloW = lineW * 1.6;
+
       if (lm) {
-        ctx.fillStyle = "#6ea8fe";
-        for (const p of lm) {
-          ctx.beginPath();
-          ctx.arc(p.x * canvas.width, p.y * canvas.height, 4, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.strokeStyle = "#6ea8fe";
-        ctx.lineWidth = 2;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.strokeStyle = "rgba(0,0,0,0.85)";
+        ctx.lineWidth = haloW;
         for (const [a, b] of LANDMARK_CONNECTIONS) {
           ctx.beginPath();
           ctx.moveTo(lm[a].x * canvas.width, lm[a].y * canvas.height);
           ctx.lineTo(lm[b].x * canvas.width, lm[b].y * canvas.height);
           ctx.stroke();
         }
+        ctx.strokeStyle = "#4fd1ff";
+        ctx.lineWidth = lineW;
+        for (const [a, b] of LANDMARK_CONNECTIONS) {
+          ctx.beginPath();
+          ctx.moveTo(lm[a].x * canvas.width, lm[a].y * canvas.height);
+          ctx.lineTo(lm[b].x * canvas.width, lm[b].y * canvas.height);
+          ctx.stroke();
+        }
+        for (const p of lm) {
+          ctx.beginPath();
+          ctx.arc(p.x * canvas.width, p.y * canvas.height, dotR * 1.4, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(0,0,0,0.85)";
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(p.x * canvas.width, p.y * canvas.height, dotR, 0, Math.PI * 2);
+          ctx.fillStyle = "#4fd1ff";
+          ctx.fill();
+        }
       }
-      if (points.length > 0) {
+
+      if (box) {
+        ctx.strokeStyle = "rgba(0,0,0,0.85)";
+        ctx.lineWidth = haloW * 0.7;
+        ctx.setLineDash([]);
+        ctx.strokeRect(
+          box.minX * canvas.width,
+          box.minY * canvas.height,
+          (box.maxX - box.minX) * canvas.width,
+          (box.maxY - box.minY) * canvas.height,
+        );
         ctx.strokeStyle = "#f2b84b";
-        ctx.fillStyle = "#f2b84b";
-        ctx.lineWidth = 3;
+        ctx.lineWidth = lineW * 0.8;
+        ctx.setLineDash([lineW * 2, lineW * 1.4]);
+        ctx.strokeRect(
+          box.minX * canvas.width,
+          box.minY * canvas.height,
+          (box.maxX - box.minX) * canvas.width,
+          (box.maxY - box.minY) * canvas.height,
+        );
+        ctx.setLineDash([]);
+      }
+
+      if (points.length > 0) {
         if (points.length === 2) {
+          ctx.strokeStyle = "rgba(0,0,0,0.85)";
+          ctx.lineWidth = haloW;
+          ctx.beginPath();
+          ctx.moveTo(points[0].x * canvas.width, points[0].y * canvas.height);
+          ctx.lineTo(points[1].x * canvas.width, points[1].y * canvas.height);
+          ctx.stroke();
+          ctx.strokeStyle = "#f2b84b";
+          ctx.lineWidth = lineW;
           ctx.beginPath();
           ctx.moveTo(points[0].x * canvas.width, points[0].y * canvas.height);
           ctx.lineTo(points[1].x * canvas.width, points[1].y * canvas.height);
@@ -104,7 +191,12 @@ export function Capture() {
         }
         for (const p of points) {
           ctx.beginPath();
-          ctx.arc(p.x * canvas.width, p.y * canvas.height, 6, 0, Math.PI * 2);
+          ctx.arc(p.x * canvas.width, p.y * canvas.height, dotR * 1.7, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(0,0,0,0.85)";
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(p.x * canvas.width, p.y * canvas.height, dotR * 1.2, 0, Math.PI * 2);
+          ctx.fillStyle = "#f2b84b";
           ctx.fill();
         }
       }
@@ -113,17 +205,15 @@ export function Capture() {
     [],
   );
 
-  const baseImageRef = useRef<HTMLCanvasElement | null>(null);
-
   const redraw = useCallback(
-    (lm: HandLandmarks | null, points: Point2D[]) => {
+    (lm: HandLandmarks | null, points: Point2D[], box: NormBox | null) => {
       const canvas = canvasRef.current;
       const base = baseImageRef.current;
       if (!canvas || !base) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       ctx.drawImage(base, 0, 0, canvas.width, canvas.height);
-      drawStillWithOverlay(lm, points);
+      drawStillWithOverlay(lm, points, box);
     },
     [drawStillWithOverlay],
   );
@@ -168,9 +258,22 @@ export function Capture() {
         return;
       }
       setLandmarks(lm);
-      setCalPoints([]);
-      redraw(lm, []);
-      setPhase("calibrate");
+
+      // Try to find the card automatically (excluding the hand's own
+      // region) so the user doesn't have to tap its corners by hand.
+      const handBox = handBoundingBox(lm, 0.25);
+      const detected = detectCardEdge(base, handBox);
+      if (detected) {
+        setCalPoints([detected.a, detected.b]);
+        setAutoDetected(true);
+        redraw(lm, [detected.a, detected.b], detected.box);
+        setPhase("review");
+      } else {
+        setCalPoints([]);
+        setAutoDetected(false);
+        redraw(lm, [], null);
+        setPhase("calibrate");
+      }
     } catch {
       setError("Something went wrong capturing that photo. Check your connection and try again.");
       setPhase("error");
@@ -178,24 +281,27 @@ export function Capture() {
   }
 
   function onCanvasClick(e: React.MouseEvent<HTMLCanvasElement>) {
-    if (phase !== "calibrate") return;
+    if (phase !== "calibrate" && phase !== "review") return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
-    const next = calPoints.length >= 2 ? [{ x, y }] : [...calPoints, { x, y }];
+    // A tap while reviewing (whether the points came from auto-detection or
+    // a previous manual pass) starts a fresh manual override rather than
+    // adding a third point.
+    const next = phase === "review" ? [{ x, y }] : [...calPoints, { x, y }];
     setCalPoints(next);
-    redraw(landmarks, next);
-    if (next.length === 2) {
-      setPhase("review");
-    }
+    setAutoDetected(false);
+    redraw(landmarks, next, null);
+    setPhase(next.length === 2 ? "review" : "calibrate");
   }
 
   function retake() {
     setPhase("camera");
     setLandmarks(null);
     setCalPoints([]);
+    setAutoDetected(false);
     setError(null);
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1440 } } })
@@ -268,16 +374,25 @@ export function Capture() {
           has a real canvas element to draw into the moment it's clicked —
           otherwise canvasRef.current is null on the very click that needs it. */}
       <div className="stack" style={{ display: phase === "camera" || phase === "error" ? "none" : "flex" }}>
-        {phase === "detecting" && <p>Finding your hand landmarks…</p>}
+        {phase === "detecting" && <p>Finding your hand and card…</p>}
         {phase === "calibrate" && calPoints.length === 0 && (
           <p>
-            Tap both ends of your {calObj?.label.toLowerCase()}'s long edge (
-            {calObj?.referenceLengthMm}mm) in the photo below.
+            Couldn't automatically find the {calObj?.label.toLowerCase()} — tap both ends of its
+            long edge ({calObj?.referenceLengthMm}mm) in the photo below.
           </p>
         )}
         {phase === "calibrate" && calPoints.length === 1 && <p>Now tap the other end.</p>}
-        {phase === "review" && <p>Calibration set. Check the overlay looks right, then continue.</p>}
-        <canvas ref={canvasRef} onClick={onCanvasClick} style={{ width: "100%", height: "auto", display: "block", borderRadius: "var(--radius)", cursor: phase === "calibrate" ? "crosshair" : "default" }} />
+        {phase === "review" && autoDetected && (
+          <p>
+            Found your {calObj?.label.toLowerCase()} automatically (highlighted below). If that box
+            doesn't actually outline the {calObj?.label.toLowerCase()}, tap its two long-edge
+            corners yourself to override it.
+          </p>
+        )}
+        {phase === "review" && !autoDetected && (
+          <p>Calibration set manually. Check the overlay looks right, then continue.</p>
+        )}
+        <canvas ref={canvasRef} onClick={onCanvasClick} style={{ width: "100%", height: "auto", display: "block", borderRadius: "var(--radius)", cursor: phase === "calibrate" || phase === "review" ? "crosshair" : "default" }} />
         <div className="row">
           <button onClick={retake}>Retake photo</button>
           {phase === "review" && (
