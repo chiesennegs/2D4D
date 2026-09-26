@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>2D4D calibration sheet</title>
+    <style>
+      @page {
+        size: A4;
+        margin: 15mm;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+      .instructions {
+        padding: 6mm;
+        font-size: 11pt;
+      }
+      .instructions.print-hide {
+        background: #fffbe6;
+        border: 1px solid #e0c34a;
+      }
+      @media print {
+        .print-hide {
+          display: none;
+        }
+      }
+      .sheet {
+        position: relative;
+        width: 180mm;
+        height: 100mm;
+        margin: 6mm;
+        border: 0.3mm solid #000;
+      }
+      .ruler {
+        position: absolute;
+        top: 10mm;
+        left: 10mm;
+        width: 100mm;
+        height: 0;
+        border-top: 0.6mm solid #000;
+      }
+      .ruler::before,
+      .ruler::after {
+        content: "";
+        position: absolute;
+        top: -3mm;
+        width: 0;
+        height: 6mm;
+        border-left: 0.6mm solid #000;
+      }
+      .ruler::before {
+        left: 0;
+      }
+      .ruler::after {
+        right: 0;
+      }
+      .ruler-label {
+        position: absolute;
+        top: 12mm;
+        left: 10mm;
+        font-size: 8pt;
+      }
+      .hand-zone {
+        position: absolute;
+        top: 24mm;
+        left: 10mm;
+        width: 160mm;
+        height: 68mm;
+        border: 0.3mm dashed #666;
+        font-size: 8pt;
+        color: #666;
+        padding: 2mm;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="instructions print-hide">
+      <strong>Before printing:</strong> in your browser's print dialog, set <strong>Scale to
+      100%</strong> (turn off "Fit to page" / "Shrink to fit"). Print on A4 or US Letter — the
+      100.00mm reference line only stays accurate at true 100% scale. After printing, place your
+      hand in the dashed zone with the sheet flat and the ruler line visible in the same photo.
+    </div>
+    <div class="sheet">
+      <div class="ruler"></div>
+      <div class="ruler-label">0mm&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;100mm</div>
+      <div class="hand-zone">Place hand flat here, palm up, fingers relaxed and slightly spread</div>
+    </div>
+  </body>
+</html>
